@@ -10,29 +10,28 @@
 --accent:#2563eb;
 --accent2:#7c3aed;
 --dark:#1f2937;
---bg:#ffffff;
 }
 *{box-sizing:border-box}
 body{margin:0;background:#f4f6f8;font-family:Arial,sans-serif}
 #audio-reader{max-width:1200px;margin:20px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.15)}
 .header{background:var(--dark);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
 .header h2{margin:0;color:#fff}
+.header h2 span{color:var(--accent)}
 .main{display:grid;grid-template-columns:340px 1fr;min-height:700px}
 .controls{padding:20px;background:#fafafa;border-right:1px solid #eee;display:flex;flex-direction:column;gap:14px}
 .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
-button,.btn{background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:700}
-.secondary{background:var(--accent2)}
+button{background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:700}
+button.secondary{background:var(--accent2)}
 input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
-.text-display{padding:20px;overflow:auto}
+.text-display{padding:20px;overflow:auto;line-height:1.7}
+.highlight{background:yellow}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{background:#f3f4f6;padding:10px;border-radius:10px;text-align:center}
-.highlight{background:yellow}
-@media(max-width:768px){
-.main{grid-template-columns:1fr}
-}
+@media(max-width:768px){.main{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+
 <div id="audio-reader">
 <div class="header">
 <h2>CRESHY AUDIO READER</h2>
@@ -40,6 +39,7 @@ input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
 </div>
 
 <div class="main">
+
 <div class="controls">
 <div class="card">
 <input type="file" id="file" accept=".pdf,.txt">
@@ -52,9 +52,9 @@ input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
 
 <div class="card">
 <label>Rate</label>
-<input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+<input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
 <label>Pitch</label>
-<input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+<input type="range" id="pitch" min="0" max="2" value="1" step="0.1">
 </div>
 
 <div class="card">
@@ -63,29 +63,39 @@ input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
 
 <button id="play">Start Listening</button>
 <button id="pause" class="secondary">Pause / Resume</button>
-<button id="stop">Stop</button>
+<button id="stop" class="secondary">Stop</button>
 
 <div class="card stats">
 <div class="stat"><div id="words">0</div><small>Words</small></div>
 <div class="stat"><div id="chars">0</div><small>Chars</small></div>
 <div class="stat"><div id="pages">0</div><small>Pages</small></div>
 </div>
+
 </div>
 
-<div class="text-display" id="output">
-Upload PDF or TXT file.
-</div>
+<div class="text-display" id="output">Upload PDF or TXT file.</div>
+
 </div>
 </div>
 
 <script>
 const synth=window.speechSynthesis;
-let text="",utterance,currentPDFPages=0,paused=false;
+let text="",utterance="",pages=0,paused=false;
+
+const voicesSel=document.getElementById('voices');
+const file=document.getElementById('file');
+const output=document.getElementById('output');
 
 function loadVoices(){
 const v=synth.getVoices();
-voices.innerHTML=v.map(x=>`<option>${x.name}</option>`).join('');
+voicesSel.innerHTML=v.map(x=>`<option value="${x.name}">${x.name} (${x.lang})</option>`).join('');
+
+// DEFAULT FEMALE (best match heuristic)
+let female=v.find(x=>/female|samantha|zira|google uk english female/i.test(x.name));
+if(female) voicesSel.value=female.name;
+else if(v[0]) voicesSel.value=v[0].name;
 }
+
 loadVoices();
 speechSynthesis.onvoiceschanged=loadVoices;
 
@@ -93,57 +103,63 @@ file.addEventListener('change',async(e)=>{
 const f=e.target.files[0];
 if(!f)return;
 
-if(f.name.toLowerCase().endsWith('.txt')){
+if(f.name.endsWith('.txt')){
 text=await f.text();
-currentPDFPages=1;
-renderText();
+pages=1;
+render();
 return;
 }
 
 const arr=new Uint8Array(await f.arrayBuffer());
 const pdf=await pdfjsLib.getDocument(arr).promise;
-currentPDFPages=pdf.numPages;
-let full='';
+
+pages=pdf.numPages;
+let full="";
 for(let i=1;i<=pdf.numPages;i++){
 const p=await pdf.getPage(i);
 const c=await p.getTextContent();
-full+=c.items.map(i=>i.str).join(' ')+' ';
+full+=c.items.map(i=>i.str).join(" ")+" ";
 }
 text=full;
-renderText();
+render();
 });
 
-function renderText(){
+function render(){
 output.innerText=text;
-words.innerText=text.trim().split(/\s+/).length;
-chars.innerText=text.length;
-pages.innerText=currentPDFPages;
+document.getElementById('words').innerText=text.split(/\s+/).length;
+document.getElementById('chars').innerText=text.length;
+document.getElementById('pages').innerText=pages;
 }
 
-play.onclick=()=>{
-if(!text){alert('Upload file first');return;}
+document.getElementById('play').onclick=()=>{
+if(!text)return alert("Upload file first");
+
 speechSynthesis.cancel();
 utterance=new SpeechSynthesisUtterance(text);
-utterance.rate=parseFloat(rate.value);
-utterance.pitch=parseFloat(pitch.value);
-utterance.voice=synth.getVoices().find(v=>v.name===voices.value);
+utterance.rate=parseFloat(document.getElementById('rate').value);
+utterance.pitch=parseFloat(document.getElementById('pitch').value);
+utterance.voice=synth.getVoices().find(v=>v.name===voicesSel.value);
 speechSynthesis.speak(utterance);
 };
 
-pause.onclick=()=>{
+document.getElementById('pause').onclick=()=>{
 if(!speechSynthesis.speaking)return;
 if(paused){speechSynthesis.resume();paused=false;}
 else{speechSynthesis.pause();paused=true;}
 };
 
-stop.onclick=()=>speechSynthesis.cancel();
+document.getElementById('stop').onclick=()=>speechSynthesis.cancel();
 
-search.addEventListener('input',()=>{
+document.getElementById('search').addEventListener('input',()=>{
 if(!text)return;
-let q=search.value.trim();
+let q=document.getElementById('search').value;
 if(!q){output.innerText=text;return;}
-output.innerHTML=text.replaceAll(q,'<span class="highlight">'+q+'</span>');
+output.innerHTML=text.replaceAll(q,'<mark>'+q+'</mark>');
 });
 </script>
+
 </body>
 </html>
+Path(path).write_text(html, encoding="utf-8")
+
+path
