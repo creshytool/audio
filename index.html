@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF Audio Reader | Creshy TTS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+--accent:#2563eb;
+--accent2:#7c3aed;
+--dark:#1f2937;
+--bg:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6f8;font-family:Arial,sans-serif}
+#audio-reader{max-width:1200px;margin:20px auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.15)}
+.header{background:var(--dark);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+.header h2{margin:0;color:#fff}
+.main{display:grid;grid-template-columns:340px 1fr;min-height:700px}
+.controls{padding:20px;background:#fafafa;border-right:1px solid #eee;display:flex;flex-direction:column;gap:14px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+button,.btn{background:var(--accent);color:#fff;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:700}
+.secondary{background:var(--accent2)}
+input,select{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px}
+.text-display{padding:20px;overflow:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#f3f4f6;padding:10px;border-radius:10px;text-align:center}
+.highlight{background:yellow}
+@media(max-width:768px){
+.main{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="audio-reader">
+<div class="header">
+<h2>CRESHY AUDIO READER</h2>
+<div>Advanced Edition</div>
+</div>
+
+<div class="main">
+<div class="controls">
+<div class="card">
+<input type="file" id="file" accept=".pdf,.txt">
+</div>
+
+<div class="card">
+<label>Voice</label>
+<select id="voices"></select>
+</div>
+
+<div class="card">
+<label>Rate</label>
+<input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+<label>Pitch</label>
+<input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+</div>
+
+<div class="card">
+<input id="search" placeholder="Search text">
+</div>
+
+<button id="play">Start Listening</button>
+<button id="pause" class="secondary">Pause / Resume</button>
+<button id="stop">Stop</button>
+
+<div class="card stats">
+<div class="stat"><div id="words">0</div><small>Words</small></div>
+<div class="stat"><div id="chars">0</div><small>Chars</small></div>
+<div class="stat"><div id="pages">0</div><small>Pages</small></div>
+</div>
+</div>
+
+<div class="text-display" id="output">
+Upload PDF or TXT file.
+</div>
+</div>
+</div>
+
+<script>
+const synth=window.speechSynthesis;
+let text="",utterance,currentPDFPages=0,paused=false;
+
+function loadVoices(){
+const v=synth.getVoices();
+voices.innerHTML=v.map(x=>`<option>${x.name}</option>`).join('');
+}
+loadVoices();
+speechSynthesis.onvoiceschanged=loadVoices;
+
+file.addEventListener('change',async(e)=>{
+const f=e.target.files[0];
+if(!f)return;
+
+if(f.name.toLowerCase().endsWith('.txt')){
+text=await f.text();
+currentPDFPages=1;
+renderText();
+return;
+}
+
+const arr=new Uint8Array(await f.arrayBuffer());
+const pdf=await pdfjsLib.getDocument(arr).promise;
+currentPDFPages=pdf.numPages;
+let full='';
+for(let i=1;i<=pdf.numPages;i++){
+const p=await pdf.getPage(i);
+const c=await p.getTextContent();
+full+=c.items.map(i=>i.str).join(' ')+' ';
+}
+text=full;
+renderText();
+});
+
+function renderText(){
+output.innerText=text;
+words.innerText=text.trim().split(/\s+/).length;
+chars.innerText=text.length;
+pages.innerText=currentPDFPages;
+}
+
+play.onclick=()=>{
+if(!text){alert('Upload file first');return;}
+speechSynthesis.cancel();
+utterance=new SpeechSynthesisUtterance(text);
+utterance.rate=parseFloat(rate.value);
+utterance.pitch=parseFloat(pitch.value);
+utterance.voice=synth.getVoices().find(v=>v.name===voices.value);
+speechSynthesis.speak(utterance);
+};
+
+pause.onclick=()=>{
+if(!speechSynthesis.speaking)return;
+if(paused){speechSynthesis.resume();paused=false;}
+else{speechSynthesis.pause();paused=true;}
+};
+
+stop.onclick=()=>speechSynthesis.cancel();
+
+search.addEventListener('input',()=>{
+if(!text)return;
+let q=search.value.trim();
+if(!q){output.innerText=text;return;}
+output.innerHTML=text.replaceAll(q,'<span class="highlight">'+q+'</span>');
+});
+</script>
+</body>
+</html>
